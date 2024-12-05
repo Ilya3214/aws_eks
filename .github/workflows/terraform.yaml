@@ -44,28 +44,28 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
-
+        
     - name: Lint and Fix Terraform Files
       run: terraform fmt -recursive -check -write=true
-      working-directory: env/${{ github.event.inputs.environment }}
-    - name: Lint and Fix Terraform Files
-      run: terraform fmt -recursive -check -write=true
-      working-directory: ./eks-cluster/env/${{ github.event.inputs.environment }}
+      working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
 
     - name: Terraform Init
       run: terraform init
-      working-directory: ./eks-cluster/env/${{ github.event.inputs.environment }}
+      working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
 
     - name: Terraform Plan
       run: terraform plan -out=tfplan
-      working-directory: ./eks-cluster/env/${{ github.event.inputs.environment }}
+      working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
 
     - name: Terraform Apply
       if: ${{ github.event.inputs.action == 'apply' }}
       run: terraform apply -auto-approve tfplan
-      working-directory: ./eks-cluster/env/${{ github.event.inputs.environment }}
+      working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
 
     - name: Terraform Destroy
       if: ${{ github.event.inputs.action == 'destroy' }}
       run: terraform destroy -auto-approve
-      working-directory: ./eks-cluster/env/${{ github.event.inputs.environment }}
+      working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
+    
+
+    
