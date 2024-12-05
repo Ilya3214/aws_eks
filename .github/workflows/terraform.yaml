@@ -50,22 +50,22 @@ jobs:
       working-directory: env/${{ github.event.inputs.environment }}
     - name: Lint and Fix Terraform Files
       run: terraform fmt -recursive -check -write=true
-      working-directory: ./env/${{ github.event.inputs.environment }}
+      working-directory: ./eks-cluster/env/${{ github.event.inputs.environment }}
 
     - name: Terraform Init
       run: terraform init
-      working-directory: ./env/${{ github.event.inputs.environment }}
+      working-directory: ./eks-cluster/env/${{ github.event.inputs.environment }}
 
     - name: Terraform Plan
       run: terraform plan -out=tfplan
-      working-directory: ./env/${{ github.event.inputs.environment }}
+      working-directory: ./eks-cluster/env/${{ github.event.inputs.environment }}
 
     - name: Terraform Apply
       if: ${{ github.event.inputs.action == 'apply' }}
       run: terraform apply -auto-approve tfplan
-      working-directory: ./env/${{ github.event.inputs.environment }}
+      working-directory: ./eks-cluster/env/${{ github.event.inputs.environment }}
 
     - name: Terraform Destroy
       if: ${{ github.event.inputs.action == 'destroy' }}
       run: terraform destroy -auto-approve
-      working-directory: ./env/${{ github.event.inputs.environment }}
+      working-directory: ./eks-cluster/env/${{ github.event.inputs.environment }}
