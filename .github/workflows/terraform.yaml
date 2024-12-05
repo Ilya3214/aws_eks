@@ -11,6 +11,11 @@ on:
         options:
           - apply
           - destroy
+      environment:
+        description: "Choose the environment (dev or prod)"
+        required: true
+        default: "dev"
+        type: string
 
 jobs:
   terraform:
@@ -23,7 +28,6 @@ jobs:
     env:
       TF_LOG: "INFO"
       AWS_REGION: "us-east-1"
-      TF_VAR_environment: "dev"
 
     steps:
     - name: Checkout repository
@@ -34,29 +38,31 @@ jobs:
       with:
         terraform_version: 1.5.7
 
-    # - name: Configure AWS credentials
-    #   uses: aws-actions/configure-aws-credentials@v2
-    #   with:
-    #     role-to-assume: arn:aws:iam::YOUR_ACCOUNT_ID:role/IAM_ROLE_FOR_GITHUB_ACTIONS
-    #     aws-region: ${{ env.AWS_REGION }}
-
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
-    
+
+    - name: Lint and Fix Terraform Files
+      run: terraform fmt -recursive -check -write=true
+      working-directory: env/${{ github.event.inputs.environment }}
+
     - name: Terraform Init
       run: terraform init
+      working-directory: env/${{ github.event.inputs.environment }}
 
     - name: Terraform Plan
       run: terraform plan -out=tfplan
+      working-directory: env/${{ github.event.inputs.environment }}
 
-    - name: Terraform Apply or Destroy
+    - name: Terraform Apply
       if: ${{ github.event.inputs.action == 'apply' }}
       run: terraform apply -auto-approve tfplan
+      working-directory: env/${{ github.event.inputs.environment }}
 
     - name: Terraform Destroy
       if: ${{ github.event.inputs.action == 'destroy' }}
       run: terraform destroy -auto-approve
+      working-directory: env/${{ github.event.inputs.environment }}
