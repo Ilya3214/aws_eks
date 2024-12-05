@@ -47,26 +47,35 @@ jobs:
         
     - name: Lint and Fix Terraform Files
       run: |
+        echo "Checking formatting for Terraform files..."
         terraform fmt -check -recursive || {
           echo "Formatting issues detected. Fixing..."
           terraform fmt -recursive
-          }
+        }
       working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
       
     - name: Terraform Init
-      run: terraform init
+      run: |
+        echo "Initializing Terraform..."
+        terraform init -backend-config="key=${{ github.event.inputs.environment }}/terraform.tfstate"
       working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
 
     - name: Terraform Plan
-      run: terraform plan -out=tfplan
+      run: |
+        echo "Planning Terraform changes..."
+        terraform plan -out=tfplan
       working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
 
     - name: Terraform Apply
       if: ${{ github.event.inputs.action == 'apply' }}
-      run: terraform apply -auto-approve tfplan
+      run: |
+        echo "Applying Terraform changes..."
+        terraform apply -auto-approve tfplan
       working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
 
     - name: Terraform Destroy
       if: ${{ github.event.inputs.action == 'destroy' }}
-      run: terraform destroy -auto-approve
+      run: |
+        echo "Destroying Terraform-managed resources..."
+        terraform destroy -auto-approve
       working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
