@@ -11,11 +11,6 @@ on:
         options:
           - apply
           - destroy
-      environment:
-        description: "Choose the environment (dev or prod)"
-        required: true
-        default: "dev"
-        type: string
 
 jobs:
   terraform:
@@ -33,6 +28,18 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
+    - name: Determine Environment
+      id: set-env
+      run: |
+        if [[ "${GITHUB_REF##*/}" == "dev" ]]; then
+          echo "ENV_FOLDER=dev" >> $GITHUB_ENV
+        elif [[ "${GITHUB_REF##*/}" == "prod" ]]; then
+          echo "ENV_FOLDER=prod" >> $GITHUB_ENV
+        else
+          echo "Unknown branch: ${GITHUB_REF##*/}. Exiting."
+          exit 1
+        fi
+
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v2
       with:
@@ -44,38 +51,21 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
-        
-    - name: Lint and Fix Terraform Files
-      run: |
-        echo "Checking formatting for Terraform files..."
-        terraform fmt -check -recursive || {
-          echo "Formatting issues detected. Fixing..."
-          terraform fmt -recursive
-        }
-      working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
-      
+
     - name: Terraform Init
-      run: |
-        echo "Initializing Terraform..."
-        terraform init -backend-config="key=${{ github.event.inputs.environment }}/terraform.tfstate"
-      working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
+      run: terraform init
+      working-directory: eks-cluster/env/${{ env.ENV_FOLDER }}
 
     - name: Terraform Plan
-      run: |
-        echo "Planning Terraform changes..."
-        terraform plan -out=tfplan
-      working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
+      run: terraform plan -out=tfplan
+      working-directory: eks-cluster/env/${{ env.ENV_FOLDER }}
 
     - name: Terraform Apply
       if: ${{ github.event.inputs.action == 'apply' }}
-      run: |
-        echo "Applying Terraform changes..."
-        terraform apply -auto-approve tfplan
-      working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
+      run: terraform apply -auto-approve tfplan
+      working-directory: eks-cluster/env/${{ env.ENV_FOLDER }}
 
     - name: Terraform Destroy
       if: ${{ github.event.inputs.action == 'destroy' }}
-      run: |
-        echo "Destroying Terraform-managed resources..."
-        terraform destroy -auto-approve
-      working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
+      run: terraform destroy -auto-approve
+      working-directory: eks-cluster/env/${{ env.ENV_FOLDER }}
