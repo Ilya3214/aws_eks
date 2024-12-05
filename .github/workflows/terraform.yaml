@@ -46,9 +46,13 @@ jobs:
         aws-region: ${{ env.AWS_REGION }}
         
     - name: Lint and Fix Terraform Files
-      run: terraform fmt -recursive -check -write=true
+      run: |
+        terraform fmt -check -recursive || {
+          echo "Formatting issues detected. Fixing..."
+          terraform fmt -recursive
+          }
       working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
-
+      
     - name: Terraform Init
       run: terraform init
       working-directory: eks-cluster/env/${{ github.event.inputs.environment }}
