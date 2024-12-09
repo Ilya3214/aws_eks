@@ -1,22 +1,24 @@
-name: Build and Push to AWS ECR
+name: Build, Push to ECR, and Deploy to EC2
 
 on:
   push:
     branches:
       - main
-      - dev
     paths:
       - 'java_app/**'
   workflow_dispatch:
 
 env:
-  AWS_REGION: us-east-1 # Update to your AWS region
-  ECR_REGISTRY: 537479208195.dkr.ecr.us-east-1.amazonaws.com # Your ECR registry URL
-  ECR_REPOSITORY_NAME: java_app # Your ECR repository name
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 537479208195.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY_NAME: java_app
+  EC2_INSTANCE_HOST: 18.208.176.32 # Replace with your EC2 instance's public IP
+  EC2_USER: ec2-user # Default user for Amazon Linux; change if needed
+  DOCKER_IMAGE_NAME: java_app
 
 jobs:
-  build-and-push:
-    name: Build and Push Docker Image to AWS ECR
+  build-and-deploy:
+    name: Build, Push Docker Image to ECR, and Deploy to EC2
     runs-on: ubuntu-latest
 
     steps:
@@ -24,7 +26,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    # Step 2: Configure AWS credentials
+    # Step 2: Configure AWS Credentials
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v3
       with:
@@ -41,15 +43,28 @@ jobs:
     # Step 4: Build the Docker image
     - name: Build Docker Image
       run: |
-        docker build -t ${{ env.ECR_REPOSITORY_NAME }} ./java_app
+        docker build -t ${{ env.DOCKER_IMAGE_NAME }} ./java_app
 
     # Step 5: Tag the Docker image
     - name: Tag Docker Image
       run: |
-        docker tag ${{ env.ECR_REPOSITORY_NAME }}:latest \
+        docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest \
         ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:latest
 
     # Step 6: Push the Docker image to ECR
     - name: Push Docker Image to ECR
       run: |
         docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:latest
+
+    # Step 7: SSH into EC2 and Pull Docker Image
+    - name: Deploy Docker Image to EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_PRIVATE_KEY }} ${{ env.EC2_USER }}@${{ env.EC2_INSTANCE_HOST }} << EOF
+          docker login --username AWS --password $(aws ecr get-login-password --region ${{ env.AWS_REGION }}) ${{ env.ECR_REGISTRY }}
+          docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:latest
+          docker stop java_app || true
+          docker rm java_app || true
+          docker run -d --name java_app -p 8080:8080 ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:latest
+        EOF
+      env:
+        AWS_REGION: ${{ env.AWS_REGION }}
