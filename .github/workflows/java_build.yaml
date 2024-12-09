@@ -11,11 +11,12 @@ on:
 
 env:
   AWS_REGION: us-east-1 # Update to your AWS region
-  ECR_REPOSITORY_NAME: your-ecr-repository-name # Update to your ECR repository name
+  ECR_REGISTRY: 537479208195.dkr.ecr.us-east-1.amazonaws.com # Your ECR registry URL
+  ECR_REPOSITORY_NAME: java_app # Your ECR repository name
 
 jobs:
   build-and-push:
-    name: Build and Push Docker Image
+    name: Build and Push Docker Image to AWS ECR
     runs-on: ubuntu-latest
 
     steps:
@@ -31,37 +32,24 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
-    # Step 3: Verify AWS Credentials
-    - name: Check AWS Credentials
-      run: |
-        aws sts get-caller-identity --region ${{ env.AWS_REGION }}
-
-    # Step 4: Log in to Amazon ECR
+    # Step 3: Log in to Amazon ECR
     - name: Log in to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v1
+      run: |
+        aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
+        docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
 
-    # Step 5: Build the Docker image
+    # Step 4: Build the Docker image
     - name: Build Docker Image
       run: |
         docker build -t ${{ env.ECR_REPOSITORY_NAME }} ./java_app
 
-    # Step 6: Tag the Docker image based on the branch
+    # Step 5: Tag the Docker image
     - name: Tag Docker Image
       run: |
-        ECR_URI=$(aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY_NAME }} --region ${{ env.AWS_REGION }} --query 'repositories[0].repositoryUri' --output text)
-        echo "ECR_URI=${ECR_URI}" >> $GITHUB_ENV
+        docker tag ${{ env.ECR_REPOSITORY_NAME }}:latest \
+        ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:latest
 
-        if [ "${{ github.ref_name }}" == "main" ]; then
-          TAG="latest"
-        else
-          TAG="${{ github.ref_name }}"
-        fi
-
-        echo "TAG=${TAG}" >> $GITHUB_ENV
-        docker tag ${{ env.ECR_REPOSITORY_NAME }}:latest ${ECR_URI}:${TAG}
-
-    # Step 7: Push the Docker image to ECR
+    # Step 6: Push the Docker image to ECR
     - name: Push Docker Image to ECR
       run: |
-        docker push ${ECR_URI}:${TAG}
+        docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:latest
