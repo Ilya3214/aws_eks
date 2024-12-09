@@ -11,7 +11,7 @@ on:
 
 env:
   AWS_REGION: us-east-1 # Update to your AWS region
-  ECR_REPOSITORY_NAME: your-ecr-repository-name # Update to your ECR repository name
+  ECR_REPOSITORY_NAME: java_app # Update to your ECR repository name
 
 jobs:
   build-and-push:
@@ -23,7 +23,15 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    # Step 2: Log in to Amazon ECR
+    # Step 2: Verify AWS Credentials
+    - name: Check AWS Credentials
+      run: |
+        aws sts get-caller-identity --region ${{ env.AWS_REGION }}
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+    # Step 3: Log in to Amazon ECR
     - name: Log in to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
@@ -32,12 +40,12 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         region: ${{ env.AWS_REGION }}
 
-    # Step 3: Build the Docker image
+    # Step 4: Build the Docker image
     - name: Build Docker Image
       run: |
         docker build -t ${{ env.ECR_REPOSITORY_NAME }} ./java_app
 
-    # Step 4: Tag the Docker image
+    # Step 5: Tag the Docker image based on the branch
     - name: Tag Docker Image
       run: |
         ECR_URI=$(aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY_NAME }} --region ${{ env.AWS_REGION }} --query 'repositories[0].repositoryUri' --output text)
@@ -52,7 +60,7 @@ jobs:
         echo "TAG=${TAG}" >> $GITHUB_ENV
         docker tag ${{ env.ECR_REPOSITORY_NAME }}:latest ${ECR_URI}:${TAG}
 
-    # Step 5: Push the Docker image to ECR
+    # Step 6: Push the Docker image to ECR
     - name: Push Docker Image to ECR
       run: |
         docker push ${ECR_URI}:${TAG}
