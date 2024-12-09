@@ -7,6 +7,15 @@ on:
     paths:
       - 'java_app/**'
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to use for this deployment'
+        required: false
+        default: 'main'
+      image_tag:
+        description: 'Docker image tag (e.g., latest, dev, or custom version)'
+        required: false
+        default: 'latest'
 
 env:
   AWS_REGION: us-east-1
@@ -25,6 +34,8 @@ jobs:
     # Step 1: Checkout the code
     - name: Checkout code
       uses: actions/checkout@v3
+      with:
+        ref: ${{ inputs.branch }}
 
     # Step 2: Configure AWS Credentials
     - name: Configure AWS Credentials
@@ -49,22 +60,22 @@ jobs:
     - name: Tag Docker Image
       run: |
         docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest \
-        ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:latest
+        ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
 
     # Step 6: Push the Docker image to ECR
     - name: Push Docker Image to ECR
       run: |
-        docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:latest
+        docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
 
     # Step 7: SSH into EC2 and Pull Docker Image
     - name: Deploy Docker Image to EC2
       run: |
         ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_PRIVATE_KEY }} ${{ env.EC2_USER }}@${{ env.EC2_INSTANCE_HOST }} << EOF
           docker login --username AWS --password $(aws ecr get-login-password --region ${{ env.AWS_REGION }}) ${{ env.ECR_REGISTRY }}
-          docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:latest
+          docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
           docker stop java_app || true
           docker rm java_app || true
-          docker run -d --name java_app -p 8080:8080 ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:latest
+          docker run -d --name java_app -p 8080:8080 ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
         EOF
       env:
         AWS_REGION: ${{ env.AWS_REGION }}
