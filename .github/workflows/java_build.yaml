@@ -52,11 +52,15 @@ jobs:
       run: |
         docker build -t ${{ env.DOCKER_IMAGE_NAME }} ./java_app
 
-    # Step 5: Tag the Docker image
-    - name: Tag Docker Image
+    # Step 5: Save the Docker image to a file
+    - name: Save Docker Image
       run: |
-        docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest \
-        ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
+        docker save ${{ env.DOCKER_IMAGE_NAME }} -o java_app.tar
+      # Upload the saved Docker image as an artifact to share with other jobs
+      - uses: actions/upload-artifact@v3
+        with:
+          name: java_app_image
+          path: java_app.tar
 
   test:
     name: Test Docker Image
@@ -64,7 +68,17 @@ jobs:
     needs: build
 
     steps:
-    # Step 1: Run Integration Tests Using Local Image
+    # Step 1: Download the Docker image artifact
+    - uses: actions/download-artifact@v3
+      with:
+        name: java_app_image
+
+    # Step 2: Load the Docker image from the artifact
+    - name: Load Docker Image
+      run: |
+        docker load -i java_app.tar
+
+    # Step 3: Run Integration Tests Using Local Image
     - name: Run Integration Tests
       run: |
         docker run --rm -d --name test_container \
@@ -74,7 +88,7 @@ jobs:
         curl -f http://localhost/api/some-endpoint || exit 1
         docker stop test_container
 
-    # Step 2: Run Unit Tests Inside Container
+    # Step 4: Run Unit Tests Inside Container
     - name: Run Unit Tests Inside Container
       run: |
         docker run --rm ${{ env.DOCKER_IMAGE_NAME }} \
