@@ -141,3 +141,5 @@ jobs:
             docker run -d --name java_app -p 8080:8080 \
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
           EOF
+
+          
