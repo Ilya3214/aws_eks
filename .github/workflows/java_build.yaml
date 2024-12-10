@@ -3,7 +3,7 @@ name: Build, Push to ECR, and Deploy to EC2
 on:
   push:
     branches:
-      - main
+      - dev
     paths:
       - 'java_app/**'
   workflow_dispatch:
@@ -11,7 +11,7 @@ on:
       branch:
         description: 'Branch to use for this deployment'
         required: false
-        default: 'main'
+        default: 'dev'
       image_tag:
         description: 'Docker image tag (e.g., latest, dev, or custom version)'
         required: false
