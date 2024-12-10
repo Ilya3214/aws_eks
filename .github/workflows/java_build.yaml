@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'java_app/**'
+      - 'java_app/**' # Monitor changes in the java_app directory
   workflow_dispatch:
     inputs:
       branch:
