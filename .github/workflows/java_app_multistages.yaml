@@ -70,12 +70,12 @@ jobs:
       - name: Save Docker Image as tar.gz
         run: |
           docker save java_app:latest | gzip > java_app_latest.tar.gz
-
+          
       - name: Upload Docker Image as Artifact
         uses: actions/upload-artifact@v3
-      with:
-        name: built-image
-        path: java_app_latest.tar.gz
+        with:
+          name: built-image
+          path: java_app_latest.tar.gz
   
   push-to-ecr:
     name: Push to ECR
