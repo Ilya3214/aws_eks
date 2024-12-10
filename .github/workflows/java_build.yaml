@@ -63,16 +63,17 @@ jobs:
         echo "Checking application logs for debugging:"
         docker logs test_container
 
-        echo "Testing /health endpoint:"
-        curl -f http://localhost:8080/health || {
-          echo "Failed to reach /health endpoint";
+        echo "Testing /index.html endpoint:"
+        curl -f http://localhost:8080/index.html || {
+          echo "Failed to reach /index.html endpoint";
           docker logs test_container;
           exit 1;
         }
 
-        echo "Testing /api/some-endpoint endpoint:"
-        curl -f http://localhost:8080/api/some-endpoint || {
-          echo "Failed to reach /api/some-endpoint";
+        # Optional: Add a test for /health if implemented
+        echo "Testing /health endpoint:"
+        curl -f http://localhost:8080/health || {
+          echo "Failed to reach /health endpoint";
           docker logs test_container;
           exit 1;
         }
