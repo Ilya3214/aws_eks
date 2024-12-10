@@ -67,12 +67,15 @@ jobs:
 
           docker stop test_container
 
-      - name: Save Docker Image as Artifact
+      - name: Save Docker Image as tar.gz
+        run: |
+          docker save java_app:latest | gzip > java_app_latest.tar.gz
+
+      - name: Upload Docker Image as Artifact
         uses: actions/upload-artifact@v3
-        with:
-          name: built-image
-          path: |
-            $(docker save ${{ env.DOCKER_IMAGE_NAME }}:latest | gzip > java_app_latest.tar.gz && echo java_app_latest.tar.gz)
+      with:
+        name: built-image
+        path: java_app_latest.tar.gz
   
   push-to-ecr:
     name: Push to ECR
