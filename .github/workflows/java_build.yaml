@@ -64,39 +64,20 @@ jobs:
     needs: build
 
     steps:
-    # Step 1: Configure AWS Credentials
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v3
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-
-    # Step 2: Log in to Amazon ECR
-    - name: Log in to Amazon ECR
-      run: |
-        aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
-        docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
-
-    # Step 3: Pull the Docker image from ECR
-    - name: Pull Docker Image
-      run: |
-        docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
-
-    # Step 4: Run Integration Tests
+    # Step 1: Run Integration Tests Using Local Image
     - name: Run Integration Tests
       run: |
         docker run --rm -d --name test_container \
-        -p 8080:8080 ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
+        -p 8080:8080 ${{ env.DOCKER_IMAGE_NAME }}
         sleep 5  # Wait for the container to start
         curl -f http://localhost:8080/health || exit 1
         curl -f http://localhost/api/some-endpoint || exit 1
         docker stop test_container
 
-    # Step 5: Run Unit Tests Inside Container
+    # Step 2: Run Unit Tests Inside Container
     - name: Run Unit Tests Inside Container
       run: |
-        docker run --rm ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }} \
+        docker run --rm ${{ env.DOCKER_IMAGE_NAME }} \
         ./gradlew test --tests 'com.example.MyAppTests'
 
   push:
