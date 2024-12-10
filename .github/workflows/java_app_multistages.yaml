@@ -342,7 +342,7 @@ env:
   AWS_REGION: us-east-1
   ECR_REGISTRY: 537479208195.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY_NAME: java_app
-  EC2_USER: ec2-user
+  EC2_INSTANCE_USER: ec2-user
   DOCKER_IMAGE_NAME: java_app
 
 jobs:
@@ -374,15 +374,14 @@ jobs:
           # Retry loop to ensure the container starts
           for i in {1..10}; do
             if curl -f http://localhost:8080/index.html; then
-              echo "Application is up!";
               break
             fi
-            echo "Waiting for application to start... Retry $i";
+            echo "Waiting for application to start... Retry $i"
             sleep 2
           done || {
-            echo "Failed to start application within timeout";
-            docker logs test_container;
-            exit 1;
+            echo "Failed to start application within timeout"
+            docker logs test_container
+            exit 1
           }
 
           echo "Checking application logs for debugging:"
@@ -390,23 +389,23 @@ jobs:
 
           echo "Testing /index.html endpoint:"
           curl -f http://localhost:8080/index.html || {
-            echo "Failed to reach /index.html endpoint";
-            docker logs test_container;
-            exit 1;
+            echo "Failed to reach /index.html endpoint"
+            docker logs test_container
+            exit 1
           }
 
           echo "Testing /health endpoint:"
           curl -f http://localhost:8080/actuator/health || {
-            echo "Failed to reach /health endpoint";
-            docker logs test_container;
-            exit 1;
+            echo "Failed to reach /health endpoint"
+            docker logs test_container
+            exit 1
           }
 
           docker stop test_container
 
       - name: Save Docker Image as tar.gz
         run: |
-          docker save java_app:latest | gzip > java_app_latest.tar.gz
+          docker save ${{ env.DOCKER_IMAGE_NAME }}:latest | gzip > java_app_latest.tar.gz
           
       - name: Upload Docker Image as Artifact
         uses: actions/upload-artifact@v4
@@ -438,13 +437,11 @@ jobs:
           
       - name: Log in to Amazon ECR
         run: |
-          aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
-          docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
 
       - name: Tag Docker Image
         run: |
-          docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest \
-          ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
+          docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
 
       - name: Push Docker Image to ECR
         run: |
@@ -464,49 +461,9 @@ jobs:
         id: determine-instance-name
         run: |
           if [ "${{ inputs.branch }}" == "main" ]; then
-            echo "INSTANCE_NAME=prod-ec2-instance" >> $GITHUB_ENV
+            echo "EC2_INSTANCE_NAME=prod-ec2-instance" >> $GITHUB_ENV
           else
-            echo "INSTANCE_NAME=dev-ec2-instance" >> $GITHUB_ENV
-          fi
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v3
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Retrieve EC2 Public IP
-        id: get-ec2-ip
-        run: |
-          INSTANCE_IP=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=${{ env.INSTANCE_NAME }}" "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].PublicIpAddress" \
-            --output text)
-        
-          if [ "$INSTANCE_IP" == "None" ]; then
-            echo "No running instance found with name ${{ env.INSTANCE_NAME }}.";
-            exit 1;
-          fi
-        
-          echo "EC2_INSTANCE_HOST=$INSTANCE_IP" >> $GITHUB_ENV
-        
-      deploy-to-ec2:
-    name: Deploy to EC2
-    runs-on: ubuntu-latest
-    needs: push-to-ecr
-    steps:
-      - name: Prepare SSH Key
-        run: |
-          echo "${{ secrets.EC2_PRIVATE_KEY }}" > private_key.pem
-          chmod 600 private_key.pem
-
-      - name: Determine EC2 Instance Name
-        id: determine-instance-name
-        run: |
-          if [ "${{ inputs.branch }}" == "main" ]; then
-            echo "INSTANCE_NAME=prod-ec2-instance" >> $GITHUB_ENV
-          else
-            echo "INSTANCE_NAME=dev-ec2-instance" >> $GITHUB_ENV
+            echo "EC2_INSTANCE_NAME=dev-ec2-instance" >> $GITHUB_ENV
           fi
 
       - name: Configure AWS Credentials
@@ -520,12 +477,12 @@ jobs:
         id: get-ec2-ips
         run: |
           INSTANCE_IPS=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=${{ env.INSTANCE_NAME }}" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:Name,Values=${{ env.EC2_INSTANCE_NAME }}" "Name=instance-state-name,Values=running" \
             --query "Reservations[].Instances[].PublicIpAddress" \
             --output text)
         
           if [ -z "$INSTANCE_IPS" ]; then
-            echo "No running instances found with name ${{ env.INSTANCE_NAME }}."
+            echo "No running instances found with name ${{ env.EC2_INSTANCE_NAME }}."
             exit 1
           fi
         
@@ -535,16 +492,16 @@ jobs:
         run: |
           for ip in $EC2_INSTANCE_HOSTS; do
             echo "Deploying to $ip..."
-            ssh -o StrictHostKeyChecking=no -i private_key.pem ec2-user@$ip << 'EOF'
+            ssh -o StrictHostKeyChecking=no -i private_key.pem ${{ env.EC2_INSTANCE_USER }}@$ip << 'EOF'
               set -e
-              aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 537479208195.dkr.ecr.us-east-1.amazonaws.com
-              docker pull 537479208195.dkr.ecr.us-east-1.amazonaws.com/java_app:latest || {
+              aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+              docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }} || {
                 echo "Failed to pull Docker image"
                 exit 1
               }
               docker stop java_app || true
               docker rm java_app || true
               docker run -d --name java_app -p 8080:8080 \
-                537479208195.dkr.ecr.us-east-1.amazonaws.com/java_app:latest
+                ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
           EOF
             done
