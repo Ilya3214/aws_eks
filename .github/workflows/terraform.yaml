@@ -54,18 +54,18 @@ jobs:
 
     - name: Terraform Init
       run: terraform init
-      working-directory: eks-cluster/env/${{ env.ENV_FOLDER }}
+      working-directory: terraform_infra/env/${{ env.ENV_FOLDER }}
 
     - name: Terraform Plan
       run: terraform plan -out=tfplan
-      working-directory: eks-cluster/env/${{ env.ENV_FOLDER }}
+      working-directory: terraform_infra/env/${{ env.ENV_FOLDER }}
 
     - name: Terraform Apply
       if: ${{ github.event.inputs.action == 'apply' }}
       run: terraform apply -auto-approve tfplan
-      working-directory: eks-cluster/env/${{ env.ENV_FOLDER }}
+      working-directory: terraform_infra/env/${{ env.ENV_FOLDER }}
 
     - name: Terraform Destroy
       if: ${{ github.event.inputs.action == 'destroy' }}
       run: terraform destroy -auto-approve
-      working-directory: eks-cluster/env/${{ env.ENV_FOLDER }}
+      working-directory: terraform_infra/env/${{ env.ENV_FOLDER }}

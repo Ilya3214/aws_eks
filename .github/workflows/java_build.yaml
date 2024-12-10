@@ -1,0 +1,94 @@
+name: Build, Push to ECR, and Deploy to EC2
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to deploy (main or dev)'
+        required: true
+        default: 'main'
+      image_tag:
+        description: 'Docker image tag (e.g., latest, dev, or custom)'
+        required: false
+        default: 'latest'
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 537479208195.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY_NAME: java_app
+  EC2_INSTANCE_HOST_MAIN: 18.208.176.32 # Replace with the EC2 instance's public IP for main branch
+  EC2_INSTANCE_HOST_DEV: 18.208.176.33 # Replace with the EC2 instance's public IP for dev branch
+  EC2_USER: ec2-user # Default user for Amazon Linux
+  DOCKER_IMAGE_NAME: java_app
+
+jobs:
+  build-push-deploy:
+    name: Build, Push Docker Image to ECR, and Deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+    # Step 1: Checkout the code
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ inputs.branch }}
+
+    # Step 2: Configure AWS Credentials
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v3
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    # Step 3: Log in to Amazon ECR
+    - name: Log in to Amazon ECR
+      run: |
+        aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
+        docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+
+    # Step 4: Build the Docker image
+    - name: Build Docker Image
+      run: |
+        docker build -t ${{ env.DOCKER_IMAGE_NAME }} ./java_app
+
+    # Step 5: Tag the Docker image
+    - name: Tag Docker Image
+      run: |
+        docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest \
+        ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
+
+    # Step 6: Push the Docker image to ECR
+    - name: Push Docker Image to ECR
+      run: |
+        docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
+
+    # Step 7: SSH into EC2 and Deploy the Docker Container
+    - name: Deploy Docker Image to EC2
+      run: |
+        if [ "${{ inputs.branch }}" == "main" ]; then
+          EC2_INSTANCE_HOST=${{ env.EC2_INSTANCE_HOST_MAIN }}
+        elif [ "${{ inputs.branch }}" == "dev" ]; then
+          EC2_INSTANCE_HOST=${{ env.EC2_INSTANCE_HOST_DEV }}
+        else
+          echo "Invalid branch: ${{ inputs.branch }}"
+          exit 1
+        fi
+
+        ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_PRIVATE_KEY }} ${{ env.EC2_USER }}@$EC2_INSTANCE_HOST << EOF
+          # Log in to ECR
+          docker login --username AWS --password $(aws ecr get-login-password --region ${{ env.AWS_REGION }}) ${{ env.ECR_REGISTRY }}
+
+          # Pull the latest image
+          docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
+
+          # Stop and remove any existing container
+          docker stop java_app || true
+          docker rm java_app || true
+
+          # Run the new container
+          docker run -d --name java_app -p 8080:8080 \
+          ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
+        EOF
+      env:
+        AWS_REGION: ${{ env.AWS_REGION }}

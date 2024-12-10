@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic No Button</title>
+    <style>
+        body {
+            background-color: #f0f8ff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        .buttons {
+            position: relative;
+            width: 300px; /* Set width for the container */
+            height: 150px; /* Set height for the container */
+            overflow: hidden;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 16px;
+            position: absolute;
+            transition: transform 0.1s ease, left 0.5s ease, top 0.5s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #no-btn {
+            top: 50px; /* Base position */
+            left: 50px; /* Base position */
+        }
+        #yes-btn {
+            top: 50px;
+            left: 200px; /* Fixed position for Yes button */
+        }
+    </style>
+</head>
+<body>
+    <h1>Do you like this page?????????</h1>
+    <div class="buttons">
+        <button id="no-btn">No</button>
+        <button id="yes-btn" onclick="alert('Yes')">Yes</button>
+    </div>
+
+    <script>
+        const noButton = document.getElementById('no-btn');
+        const basePosition = { top: 50, left: 50 }; // Base position of the button
+        const OFFSET_CM = 1; // Distance to move (1 cm)
+        const RETURN_DISTANCE_CM = 1.5; // Distance to return (1.5 cm)
+        const CM_TO_PX = 37.795; // Approximate conversion from cm to pixels
+        const OFFSET_PX = OFFSET_CM * CM_TO_PX;
+        const RETURN_DISTANCE_PX = RETURN_DISTANCE_CM * CM_TO_PX;
+
+        document.addEventListener('mousemove', (event) => {
+            const container = noButton.parentElement;
+            const containerRect = container.getBoundingClientRect();
+
+            // Calculate cursor position relative to the base position
+            const mouseX = event.clientX - containerRect.left;
+            const mouseY = event.clientY - containerRect.top;
+            const deltaX = mouseX - basePosition.left;
+            const deltaY = mouseY - basePosition.top;
+
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+            if (distance < RETURN_DISTANCE_PX) {
+                // Move the button 1 cm away in the opposite direction
+                const normalizedX = -deltaX / distance;
+                const normalizedY = -deltaY / distance;
+                const moveX = normalizedX * OFFSET_PX;
+                const moveY = normalizedY * OFFSET_PX;
+
+                noButton.style.left = `${basePosition.left + moveX}px`;
+                noButton.style.top = `${basePosition.top + moveY}px`;
+            } else {
+                // Return to the base position
+                noButton.style.left = `${basePosition.left}px`;
+                noButton.style.top = `${basePosition.top}px`;
+            }
+        });
+    </script>
+</body>
+</html>
