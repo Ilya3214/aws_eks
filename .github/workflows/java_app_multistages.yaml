@@ -17,7 +17,7 @@ env:
   ECR_REGISTRY: 537479208195.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY_NAME: java_app
   EC2_INSTANCE_HOST_MAIN: 18.208.176.32
-  EC2_INSTANCE_HOST_DEV: 18.208.176.33
+  EC2_INSTANCE_HOST_DEV: 18.208.176.32
   EC2_USER: ec2-user
   DOCKER_IMAGE_NAME: java_app
 
@@ -88,7 +88,7 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-          
+
       - name: Download Docker Image Artifact
         uses: actions/download-artifact@v3
         with:
