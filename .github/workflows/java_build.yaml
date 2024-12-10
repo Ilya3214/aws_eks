@@ -1,4 +1,4 @@
-name: Build, Push to ECR, and Deploy to EC2
+name: Build, Test, Push Docker Image to ECR, and Deploy to EC2
 
 on:
   workflow_dispatch:
@@ -16,14 +16,14 @@ env:
   AWS_REGION: us-east-1
   ECR_REGISTRY: 537479208195.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY_NAME: java_app
-  EC2_INSTANCE_HOST_MAIN: 18.208.176.32 # Replace with the EC2 instance's public IP for main branch
-  EC2_INSTANCE_HOST_DEV: 18.208.176.33 # Replace with the EC2 instance's public IP for dev branch
-  EC2_USER: ec2-user # Default user for Amazon Linux
+  EC2_INSTANCE_HOST_MAIN: 18.208.176.32
+  EC2_INSTANCE_HOST_DEV: 18.208.176.32
+  EC2_USER: ec2-user
   DOCKER_IMAGE_NAME: java_app
 
 jobs:
-  build-push-deploy:
-    name: Build, Push Docker Image to ECR, and Deploy to EC2
+  build-test-push:
+    name: Build, Test, and Push Docker Image
     runs-on: ubuntu-latest
 
     steps:
@@ -52,20 +52,34 @@ jobs:
       run: |
         docker build -t ${{ env.DOCKER_IMAGE_NAME }} ./java_app
 
-    # Step 5: Tag the Docker image
+    # Step 5: Test the Docker Image
+    - name: Test Docker Image
+      run: |
+        docker run --rm ${{ env.DOCKER_IMAGE_NAME }} echo "Image Built Successfully"
+
+    # Step 6: Tag the Docker image
     - name: Tag Docker Image
       run: |
         docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest \
         ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
 
-    # Step 6: Push the Docker image to ECR
+    # Step 7: Push the Docker image to ECR
     - name: Push Docker Image to ECR
       run: |
         docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
 
-    # Step 7: SSH into EC2 and Deploy the Docker Container
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: build-test-push
+
+    steps:
+    # Step 1: SSH into EC2 and Deploy the Docker Container
     - name: Deploy Docker Image to EC2
       run: |
+        echo "${{ secrets.EC2_PRIVATE_KEY }}" > private_key.pem
+        chmod 600 private_key.pem
+        
         if [ "${{ inputs.branch }}" == "main" ]; then
           EC2_INSTANCE_HOST=${{ env.EC2_INSTANCE_HOST_MAIN }}
         elif [ "${{ inputs.branch }}" == "dev" ]; then
@@ -75,7 +89,7 @@ jobs:
           exit 1
         fi
 
-        ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_PRIVATE_KEY }} ${{ env.EC2_USER }}@$EC2_INSTANCE_HOST << EOF
+        ssh -o StrictHostKeyChecking=no -i private_key.pem ${{ env.EC2_USER }}@$EC2_INSTANCE_HOST << EOF
           # Log in to ECR
           docker login --username AWS --password $(aws ecr get-login-password --region ${{ env.AWS_REGION }}) ${{ env.ECR_REGISTRY }}
 
