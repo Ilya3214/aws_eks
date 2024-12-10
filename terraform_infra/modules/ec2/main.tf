@@ -4,6 +4,7 @@ resource "aws_instance" "ec2_instance" {
   subnet_id                   = var.subnet_id           # Attach to the existing subnet
   vpc_security_group_ids      = [var.security_group_id] # Use the existing security group
   associate_public_ip_address = var.associate_public_ip # Whether to associate a public IP
+  iam_instance_profile        = var.iam_instance_profile
 
   key_name = var.key_name # SSH key for access
 

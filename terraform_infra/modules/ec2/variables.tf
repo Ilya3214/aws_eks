@@ -40,3 +40,8 @@ variable "environment" {
   description = "Environment name (dev, prod, etc.)"
   type        = string
 }
+
+variable "iam_instance_profile" {
+  description = "The IAM instance profile to attach to the EC2 instance"
+  type        = string
+}
