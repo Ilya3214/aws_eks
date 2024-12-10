@@ -1,4 +1,4 @@
-name: Build, Test, Push Docker Image to ECR, and Deploy to EC2
+name: Multistage Build, Test, Push Docker Image to ECR, and Deploy to EC2
 
 on:
   workflow_dispatch:
@@ -142,4 +142,3 @@ jobs:
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
           EOF
 
-          
