@@ -9,8 +9,13 @@ module "security_group" {
   name        = "docker-sg"
   description = "Allow inbound traffic for Docker"
   vpc_id      = module.vpc.vpc_id
-  ports       = [22, 80, 443]
+  ports       = [22, 80, 8080, 443]
   cidr_blocks = ["0.0.0.0/0"]
+  environment = var.environment
+}
+
+module "iam" {
+  source = "../../modules/iam"
   environment = var.environment
 }
 
@@ -22,6 +27,7 @@ module "ec2" {
   security_group_id  = module.security_group.id        # Use an existing security group
   key_name           = "linuxkey"                     # Specify the SSH key
   associate_public_ip = true
+  iam_instance_profile = module.iam.ec2_instance_profile_name
 
   tags = {
     Environment = var.environment
