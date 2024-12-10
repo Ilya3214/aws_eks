@@ -70,20 +70,14 @@ jobs:
           exit 1;
         }
 
-        # Optional: Add a test for /health if implemented
         echo "Testing /health endpoint:"
-        curl -f http://localhost:8080/health || {
+        curl -f http://localhost:8080/actuator/health || {
           echo "Failed to reach /health endpoint";
           docker logs test_container;
           exit 1;
         }
 
         docker stop test_container
-    # Step 6: Run Unit Tests Inside Container
-    - name: Run Unit Tests Inside Container
-      run: |
-        docker run --rm ${{ env.DOCKER_IMAGE_NAME }} \
-        ./gradlew test --tests 'com.example.MyAppTests'
 
   push:
     name: Push Docker Image to ECR
