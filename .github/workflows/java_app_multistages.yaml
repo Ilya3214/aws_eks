@@ -497,18 +497,18 @@ jobs:
             # Log in to ECR
             aws ecr get-login-password --region us-east-1 | \
               docker login --username AWS --password-stdin 537479208195.dkr.ecr.us-east-1.amazonaws.com
-
+        
             # Pull the latest image
             docker pull 537479208195.dkr.ecr.us-east-1.amazonaws.com/java_app:latest || {
               echo "Failed to pull Docker image";
               exit 1;
             }
-
+        
             # Stop and remove any existing container
             docker stop java_app || true
             docker rm java_app || true
-
+        
             # Run the new container
             docker run -d --name java_app -p 8080:8080 \
-            537479208195.dkr.ecr.us-east-1.amazonaws.com/java_app:latest
-          EOF    
+              537479208195.dkr.ecr.us-east-1.amazonaws.com/java_app:latest
+          EOF 
