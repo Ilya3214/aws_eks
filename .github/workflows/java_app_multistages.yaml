@@ -317,10 +317,10 @@
 #             docker stop java_app || true
 #             docker rm java_app || true
 
-#             # Run the new container
-#             docker run -d --name java_app -p 8080:8080 \
-#             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
-#           EOF
+            # Run the new container
+          #   docker run -d --name java_app -p 8080:8080 \
+          #   ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
+          # EOF
 
 ##############################################################################
 
@@ -510,5 +510,5 @@ jobs:
 
             # Run the new container
             docker run -d --name java_app -p 8080:8080 \
-              537479208195.dkr.ecr.us-east-1.amazonaws.com/java_app:latest
+            537479208195.dkr.ecr.us-east-1.amazonaws.com/java_app:latest
           EOF    
