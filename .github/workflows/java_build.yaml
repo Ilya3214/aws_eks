@@ -85,13 +85,15 @@ jobs:
     needs: build-and-test
 
     steps:
-    # Step 1: Push the Docker image to ECR
+    # Step 1: Tag the Docker image
+    - name: Tag Docker Image
+      run: |
+        docker tag java_app:latest ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
+
+    # Step 2: Push the Docker image to ECR
     - name: Push Docker Image to ECR
       run: |
-        docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest \
-        ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
         docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
-
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
