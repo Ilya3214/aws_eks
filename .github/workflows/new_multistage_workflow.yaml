@@ -1,4 +1,4 @@
-name: New Multistage Build, Test, Analyze, Push Docker Image, and Deploy to EC2
+name: Multistage Build, Test, Push Docker Image to ECR, and Deploy to EC2
 
 on:
   workflow_dispatch:
@@ -21,62 +21,56 @@ env:
 
 jobs:
   build-and-test:
-    name: Build, Test, and Analyze
+    name: Build and Test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v3
         with:
           ref: ${{ inputs.branch }}
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v3
         with:
-          java-version: 21
-          distribution: 'zulu'
-
-      - name: Cache Maven Packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
-
-      - name: Cache SonarQube Packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
-
-      - name: Build and Analyze with SonarQube
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        working-directory: java_app
-        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-          -Dsonar.projectKey=Ilya3214_aws_eks_714cb506-6c64-4265-bcb7-be37b4c135fd \
-          -Dsonar.projectName='aws_eks'
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Build Docker Image
-        run: docker build -t ${{ env.DOCKER_IMAGE_NAME }}:latest ./java_app
+        run: |
+          docker build -t ${{ env.DOCKER_IMAGE_NAME }}:latest ./java_app
 
       - name: Run Integration Tests
         run: |
           docker run --rm -d --name test_container \
           -p 8080:8080 ${{ env.DOCKER_IMAGE_NAME }}:latest
           
+          # Retry loop to ensure the container starts
           for i in {1..10}; do
             if curl -f http://localhost:8080/index.html; then
               break
             fi
+            echo "Waiting for application to start... Retry $i"
             sleep 2
           done || {
+            echo "Failed to start application within timeout"
             docker logs test_container
             exit 1
           }
 
+          echo "Checking application logs for debugging:"
+          docker logs test_container
+
+          echo "Testing /index.html endpoint:"
+          curl -f http://localhost:8080/index.html || {
+            echo "Failed to reach /index.html endpoint"
+            docker logs test_container
+            exit 1
+          }
+
+          echo "Testing /health endpoint:"
           curl -f http://localhost:8080/actuator/health || {
+            echo "Failed to reach /health endpoint"
             docker logs test_container
             exit 1
           }
@@ -84,14 +78,47 @@ jobs:
           docker stop test_container
 
       - name: Save Docker Image as tar.gz
-        run: docker save ${{ env.DOCKER_IMAGE_NAME }}:latest | gzip > java_app_latest.tar.gz
-
+        run: |
+          docker save ${{ env.DOCKER_IMAGE_NAME }}:latest | gzip > java_app_latest.tar.gz
+          
       - name: Upload Docker Image as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: built-image
           path: java_app_latest.tar.gz
-
+  
+  sonar-scan:
+    name: Build and analyze
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: 21
+          distribution: 'zulu' # Alternative distribution options are available.
+      - name: Cache SonarQube packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+      - name: Build and analyze
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        working-directory: java_app
+        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=Ilya3214_aws_eks_714cb506-6c64-4265-bcb7-be37b4c135fd -Dsonar.projectName='aws_eks'
+  
   push-to-ecr:
     name: Push to ECR
     runs-on: ubuntu-latest
@@ -109,21 +136,22 @@ jobs:
         with:
           name: built-image
           path: .
-
+      
       - name: Load Docker Image
-        run: gunzip < java_app_latest.tar.gz | docker load
-
+        run: |
+          gunzip < java_app_latest.tar.gz | docker load
+          
       - name: Log in to Amazon ECR
         run: |
-          aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
-          docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
 
       - name: Tag Docker Image
-        run: docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest \
-          ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
+        run: |
+          docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
 
       - name: Push Docker Image to ECR
-        run: docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
+        run: |
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
 
   deploy-to-ec2:
     name: Deploy to EC2
@@ -136,6 +164,7 @@ jobs:
           chmod 600 private_key.pem
 
       - name: Determine EC2 Instance Name
+        id: determine-instance-name
         run: |
           if [ "${{ inputs.branch }}" == "main" ]; then
             echo "EC2_INSTANCE_NAME=prod-ec2-instance" >> $GITHUB_ENV
@@ -143,29 +172,42 @@ jobs:
             echo "EC2_INSTANCE_NAME=dev-ec2-instance" >> $GITHUB_ENV
           fi
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Retrieve EC2 Public IPs
+        id: get-ec2-ips
         run: |
           INSTANCE_IPS=$(aws ec2 describe-instances \
             --filters "Name=tag:Name,Values=${{ env.EC2_INSTANCE_NAME }}" "Name=instance-state-name,Values=running" \
-            --query "Reservations[].Instances[].PublicIpAddress" --output text)
+            --query "Reservations[].Instances[].PublicIpAddress" \
+            --output text)
         
           if [ -z "$INSTANCE_IPS" ]; then
+            echo "No running instances found with name ${{ env.EC2_INSTANCE_NAME }}."
             exit 1
           fi
         
           echo "EC2_INSTANCE_HOSTS=$INSTANCE_IPS" >> $GITHUB_ENV
 
-      - name: Deploy to EC2
+      - name: Deploy Docker Image to All EC2 Instances
         run: |
           for ip in $EC2_INSTANCE_HOSTS; do
-            ssh -o StrictHostKeyChecking=no -i private_key.pem \
-            ${{ env.EC2_INSTANCE_USER }}@$ip << 'EOF'
-              aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
-              docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
-              docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
+            echo "Deploying to $ip..."
+            ssh -o StrictHostKeyChecking=no -i private_key.pem ${{ env.EC2_INSTANCE_USER }}@$ip << 'EOF'
+              set -e
+              aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+              docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }} || {
+                echo "Failed to pull Docker image"
+                exit 1
+              }
               docker stop java_app || true
               docker rm java_app || true
               docker run -d --name java_app -p 8080:8080 \
                 ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY_NAME }}:${{ inputs.image_tag }}
           EOF
-          done
+            done
